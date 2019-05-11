@@ -7,15 +7,16 @@ const SALT_I = 10
 const jwt = require('jsonwebtoken')
 const {Serie} = require('../server/models/Serie')
 const {Resena} = require('./models/resena')
+const { User } = require('./models/user')
+const { auth } = require('./middelware/auth')
+
 app.use(express.urlencoded({extended: true}))
 app.use(express.json())
 const port = process.env.PORT || 3001
 
 require('dotenv').config()
 
-app.listen(port, () => {
-    console.log(`Servidor corriendo en puerto ${port}`)
-})
+
 
 mongoose.connect(process.env.DATABASE, { useNewUrlParser: true },(err) => {
     if(err) return err
@@ -30,6 +31,8 @@ app.use(function(req, res, next) {
     res.header("Access-Control-Allow-Headers", "Origin, X-Requested-With, Content-Type, Accept");
     next();
   });
+
+//SERIES 
 
 app.get('/Series/all', (req,res) => {
     Serie.find({}, (err, series) => {
@@ -58,6 +61,7 @@ app.post('/series/add', (req,res) => {
     })
 })
 
+// RESEÑAS
 
 app.post('/soyserie/resena', (req, res) => {
     const resena = new Resena(req.body)
@@ -129,3 +133,62 @@ app.get("/soyserie/resena/:idresena", (req,res)=>{
 })
 
 
+// USUARIOS
+
+app.get('/users', (req, res) => {
+    User.find({}, (err, users)=>{
+      if(err) return res.status(400).send(err)
+      res.status(200).send(users)
+    }) 
+  })
+  
+  //REGISTRO
+  app.post('/users/register', (req, res) => {
+      const user = new User(req.body)
+      user.save((err, doc) => {
+          if(err) return res.json({success: false, err})
+          res.status(200).json({
+              success: true,
+              userdata: doc
+          })
+      })
+  })
+  
+  //AUTENTIFICACION
+  app.get('/users/auth', auth, (req, res) => {
+      res.status(200).json({
+        isAdmin: req.user.role === 0 ? false : true,
+        isAuth: true,
+        email: req.user.email,
+        name: req.user.name,
+        lastname: req.user.lastname
+      })
+    })
+  
+   //LOGIN 
+    app.post('/api/users/login', (req, res) => {
+      // 1. Encuentra el correo
+          User.findOne({'email': req.body.email}, (err,user) => {
+              if(!user) return res.json({loginSuccess: false, message: 'Auth fallida, email no encontrado'})
+     
+      // 2. Obtén el password y compruébalo
+            user.comparePassword(req.body.password, (err, isMatch) => {
+              if(!isMatch) return res.json({loginSuccess: false, message: "Password erróneo"})
+    
+     
+      // 3. Si todo es correcto, genera un token
+            user.generateToken((err, user)=> {
+              if(err) return res.status(400).send(err)
+          // Si todo bien, debemos guardar este token como un "cookie"
+            res.cookie('soyserie_auth', user.token).status(200).json(
+            {loginSuccess: true})
+          })
+        })
+      })
+    })
+  
+// 5. LISTENER
+
+app.listen(port, () => {
+    console.log(`Servidor corriendo en puerto ${port}`)
+})

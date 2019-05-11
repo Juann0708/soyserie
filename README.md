@@ -1,0 +1,2 @@
+# soyserie
+Repo del proyecto
